@@ -74,3 +74,172 @@ android {
 ## 사용 중단된 API 수정
 
 `app/src/main/java/kr/zbd/android/MainActivity.kt` 파일의 `onBackPressed()` 메서드는 뒤로 가기 이벤트를 처리하기 위해 최신 `OnBackPressedCallback`을 사용하도록 업데이트되어 사용 중단 경고를 해결했습니다.
+
+## 프로덕션 빌드 및 설치
+
+### 프로덕션 모드 빌드
+
+릴리즈 버전의 APK를 빌드하려면 다음 명령어를 실행합니다:
+
+```bash
+# Java 17 환경에서 릴리즈 빌드
+export JAVA_HOME=/opt/homebrew/Cellar/openjdk@17/17.0.15/libexec/openjdk.jdk/Contents/Home
+./gradlew assembleRelease
+```
+
+빌드가 완료되면 APK 파일이 다음 위치에 생성됩니다:
+- `app/build/outputs/apk/release/app-release.apk`
+
+### 휴대폰에 설치
+
+#### 방법 1: ADB를 통한 직접 설치 (USB 연결)
+
+1. **개발자 옵션 활성화**
+   - 설정 > 휴대폰 정보 > 빌드 번호를 7회 터치
+   - 설정 > 개발자 옵션 > USB 디버깅 활성화
+
+2. **USB 케이블로 휴대폰과 컴퓨터 연결**
+
+3. **연결된 기기 확인**
+   ```bash
+   adb devices
+   ```
+
+4. **APK 설치**
+   ```bash
+   # 기존 앱이 있다면 제거
+   adb uninstall kr.zbd.android
+   
+   # 새 APK 설치
+   adb install app/build/outputs/apk/release/app-release.apk
+   ```
+
+#### 방법 2: 파일 전송 후 수동 설치
+
+1. **APK 파일을 휴대폰으로 전송**
+   ```bash
+   adb push app/build/outputs/apk/release/app-release.apk /sdcard/Download/
+   ```
+
+2. **휴대폰에서 설치**
+   - 파일 관리자 앱 열기
+   - 다운로드 폴더로 이동
+   - `app-release.apk` 파일 터치
+   - "알 수 없는 소스로부터 앱 설치" 허용 (필요시)
+   - 설치 버튼 터치
+
+#### 방법 3: 이메일 또는 클라우드 전송
+
+1. APK 파일을 이메일 첨부 또는 클라우드 스토리지에 업로드
+2. 휴대폰에서 파일 다운로드
+3. 파일 관리자에서 APK 파일 실행하여 설치
+
+### 설치 후 확인
+
+- 앱 서랍에서 "즐비드" 앱 아이콘 확인
+- 앱 실행하여 정상 작동 확인
+- 필요시 권한 설정 확인
+
+### 보안 설정
+
+Android 8.0 이상에서는 알 수 없는 소스에서 앱 설치를 허용해야 합니다:
+- 설정 > 보안 > 알 수 없는 소스에서 설치 허용
+- 또는 설정 > 보안 > 알 수 없는 앱 설치 > 파일 관리자 허용
+
+## App Link 문제 해결
+
+### 문제 상황
+- **개발 빌드**: App Link가 정상 작동 (외부 브라우저 → 앱으로 복귀)
+- **프로덕션 빌드**: App Link가 작동하지 않음 (웹에서 로그인 완료, 앱으로 복귀 안됨)
+
+### 원인 분석
+1. **서명 키 차이**: 개발 빌드와 프로덕션 빌드의 서명 키가 다름
+2. **Digital Asset Links 미설정**: zbd.kr 서버에 프로덕션 서명 키 정보가 없음
+3. **App Link 자동 검증 실패**: `android:autoVerify="true"` 설정이 실패
+
+### 해결 방법
+
+#### 1. 즉시 해결 (모든 기기에 적용)
+AndroidManifest.xml에서 `android:autoVerify="false"` 명시적 설정:
+```xml
+<intent-filter android:autoVerify="false">
+    <action android:name="android.intent.action.VIEW" />
+    <category android:name="android.intent.category.DEFAULT" />
+    <category android:name="android.intent.category.BROWSABLE" />
+    <data android:scheme="https"
+        android:host="zbd.kr"
+        android:pathPrefix="/service/auth/google_callback" />
+</intent-filter>
+```
+
+**장점**: 모든 기기에서 작동, 추가 설정 불필요  
+**단점**: 사용자가 앱 선택 다이얼로그에서 수동으로 앱을 선택해야 함
+
+#### 2. 근본적 해결 (서버 설정 필요)
+zbd.kr 서버에 Digital Asset Links 파일 생성:
+
+**파일 경로**: `https://zbd.kr/.well-known/assetlinks.json`
+
+**내용**:
+```json
+[{
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "kr.zbd.android",
+    "sha256_cert_fingerprints": ["F3:44:36:8A:F7:3D:2E:E6:94:D8:38:23:41:76:78:6E:91:C4:99:BA:A3:65:FC:7B:8C:C3:01:AD:28:DD:A5:4B"]
+  }
+}]
+```
+
+#### 3. 앱 링크 상태 확인
+앱 설치 후 App Link 상태 확인:
+```bash
+adb shell am start -W -a android.intent.action.VIEW -d "https://zbd.kr/service/auth/google_callback" kr.zbd.android
+```
+
+#### 4. 로그 확인
+앱 실행 중 로그 확인:
+```bash
+adb logcat -s MainActivity
+```
+
+#### 5. 도메인 검증 상태 확인 및 수동 활성화
+
+**도메인 검증 상태 확인:**
+```bash
+adb shell dumpsys package kr.zbd.android | grep -A 10 -B 5 "Domain verification"
+```
+
+**zbd.kr 도메인이 "Disabled" 상태인 경우 수동 활성화:**
+```bash
+adb shell pm set-app-links-user-selection --package kr.zbd.android --user 0 true zbd.kr
+```
+
+**App Link 테스트:**
+```bash
+adb shell am start -W -a android.intent.action.VIEW -d "https://zbd.kr/service/auth/google_callback" kr.zbd.android
+```
+
+### 🚨 중요 사항
+
+#### ADB 명령어 vs 앱 코드 수정
+
+**ADB 명령어 해결 방법**:
+- ✅ 현재 기기에서만 작동
+- ❌ 다른 기기에 APK 설치 시 동일한 문제 발생
+- ❌ 각 기기마다 수동 설정 필요
+
+**앱 코드 수정 방법**:
+- ✅ 모든 기기에서 작동
+- ✅ APK 배포 시 추가 설정 불필요
+- ⚠️ 사용자가 앱 선택 다이얼로그에서 수동 선택 필요
+
+#### 권장사항
+1. **테스트 환경**: ADB 명령어로 빠른 테스트
+2. **프로덕션 배포**: 앱 코드 수정 (`android:autoVerify="false"`)
+3. **최적 환경**: 서버에 Digital Asset Links 파일 설정
+
+### 프로덕션 서명 키 정보
+- **SHA256 지문**: `F3:44:36:8A:F7:3D:2E:E6:94:D8:38:23:41:76:78:6E:91:C4:99:BA:A3:65:FC:7B:8C:C3:01:AD:28:DD:A5:4B`
+- **패키지명**: `kr.zbd.android`
