@@ -273,3 +273,116 @@ adb shell am start -W -a android.intent.action.VIEW -d "https://zbd.kr/service/a
 ### 프로덕션 서명 키 정보
 - **SHA256 지문**: `F3:44:36:8A:F7:3D:2E:E6:94:D8:38:23:41:76:78:6E:91:C4:99:BA:A3:65:FC:7B:8C:C3:01:AD:28:DD:A5:4B`
 - **패키지명**: `kr.zbd.android`
+
+## 🔗 App Link 설정 가이드
+
+### 📱 android:autoVerify 설정 차이점
+
+#### `android:autoVerify="true"` (권장)
+- **동작**: Google이 자동으로 Digital Asset Links 파일을 검증
+- **성공 시**: 웹에서 앱으로 **자동 이동** (사용자 선택 불필요)
+- **실패 시**: 웹 브라우저에 머물거나 앱 선택 다이얼로그 표시
+- **조건**: 서버에 올바른 `assetlinks.json` 파일 필수
+
+#### `android:autoVerify="false"`
+- **동작**: 자동 검증 건너뛰기
+- **결과**: 항상 **앱 선택 다이얼로그** 표시
+- **장점**: 서버 설정과 무관하게 동작
+- **단점**: 사용자가 매번 앱을 수동 선택해야 함
+
+### 🌐 Digital Asset Links 파일 생성
+
+#### 1. SHA256 지문 확인
+프로덕션 키스토어의 SHA256 지문을 확인합니다:
+```bash
+keytool -list -v -keystore keys/release.keystore -alias my-app-alias | grep "SHA256:"
+```
+
+#### 2. assetlinks.json 파일 생성
+서버의 `https://도메인/.well-known/assetlinks.json` 경로에 다음 내용으로 파일을 생성합니다:
+
+```json
+[{
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "kr.zbd.android",
+    "sha256_cert_fingerprints": [
+      "F3:44:36:8A:F7:3D:2E:E6:94:D8:38:23:41:76:78:6E:91:C4:99:BA:A3:65:FC:7B:8C:C3:01:AD:28:DD:A5:4B"
+    ]
+  }
+}]
+```
+
+#### 3. 파일 업로드 확인
+```bash
+curl -s https://zbd.kr/.well-known/assetlinks.json | jq .
+```
+
+#### 4. nginx 캐시 비활성화 (권장)
+```nginx
+location /.well-known/ {
+    expires -1;  # 캐시 비활성화
+    alias /srv/octopus-fe-service/.well-known/;
+}
+```
+
+### 🔍 Google API 캐시 상태 확인
+
+#### 1. Google Digital Asset Links API로 검증
+```bash
+curl -s "https://digitalassetlinks.googleapis.com/v1/statements:list?source.web.site=https://zbd.kr&relation=delegate_permission/common.handle_all_urls" | jq .
+```
+
+#### 2. 올바른 응답 예시
+```json
+{
+  "statements": [{
+    "source": {
+      "web": { "site": "https://zbd.kr." }
+    },
+    "relation": "delegate_permission/common.handle_all_urls",
+    "target": {
+      "androidApp": {
+        "packageName": "kr.zbd.android",
+        "certificate": {
+          "sha256Fingerprint": "F3:44:36:8A:F7:3D:2E:E6:94:D8:38:23:41:76:78:6E:91:C4:99:BA:A3:65:FC:7B:8C:C3:01:AD:28:DD:A5:4B"
+        }
+      }
+    }
+  }],
+  "maxAge": "3600s"
+}
+```
+
+#### 3. 캐시 갱신 대기 시간
+- **일반적**: 1-4시간
+- **최대**: 24시간
+- **확인 방법**: `maxAge` 값이 갱신되고 올바른 지문이 표시될 때까지 주기적 확인
+
+#### 4. 앱에서 도메인 검증 상태 확인
+```bash
+adb shell dumpsys package kr.zbd.android | grep -A 15 "Domain verification"
+```
+
+정상 상태:
+```
+Domain verification state:
+  zbd.kr: 1  # 성공 (1024는 실패)
+Selection state:
+  Enabled:
+    zbd.kr
+```
+
+#### 5. 강제 재검증
+Google 캐시가 갱신된 후:
+```bash
+adb shell pm verify-app-links --re-verify kr.zbd.android
+```
+
+### ⚠️ 주의사항
+
+1. **서버 파일 업데이트 후**: Google 캐시 갱신까지 시간 소요
+2. **테스트 환경**: `android:autoVerify="false"`로 테스트 후 `true`로 변경
+3. **프로덕션 배포**: Google 캐시 상태 확인 후 배포 권장
+4. **키스토어 변경 시**: 반드시 `assetlinks.json` 파일도 함께 업데이트
