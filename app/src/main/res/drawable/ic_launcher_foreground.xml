@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group android:scaleX="0.8"
+        android:scaleY="0.8"
+        android:translateX="10.8"
+        android:translateY="10.8">
+        <!-- 일기장 배경 -->
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M20,15 L88,15 A6,6 0 0,1 94,21 L94,87 A6,6 0 0,1 88,93 L20,93 A6,6 0 0,1 14,87 L14,21 A6,6 0 0,1 20,15 z"/>
+        
+        <!-- 일기장 스프링 -->
+        <path
+            android:fillColor="#E0E0E0"
+            android:pathData="M18,15 L18,93 M22,15 L22,93 M26,15 L26,93"/>
+        
+        <!-- 글씨 라인들 -->
+        <path
+            android:fillColor="#F0F0F0"
+            android:pathData="M35,30 L80,30 M35,38 L75,38 M35,46 L82,46 M35,54 L78,54 M35,62 L76,62 M35,70 L83,70 M35,78 L79,78"
+            android:strokeWidth="1"
+            android:strokeColor="#F0F0F0"/>
+        
+        <!-- ZBD 텍스트 -->
+        <path
+            android:fillColor="#4A90E2"
+            android:pathData="M36,32 L44,32 L36,36 L42,36 L42,40 L36,40 z"/>
+        <path
+            android:fillColor="#4A90E2"
+            android:pathData="M46,32 L46,40 L50,40 A2,2 0 0,0 52,38 L52,36 A2,2 0 0,0 50,34 L50,32 L46,32 z M48,34 L48,38 L50,38 L50,34 z"/>
+        <path
+            android:fillColor="#4A90E2"
+            android:pathData="M54,32 L54,40 L58,40 A2,2 0 0,0 60,38 L60,34 A2,2 0 0,0 58,32 z M56,34 L56,38 L58,38 L58,34 z"/>
+        
+        <!-- 하트 아이콘 (라이프로그 감성) -->
+        <path
+            android:fillColor="#FF6B6B"
+            android:pathData="M70,50 C70,47 68,45 65,45 C62,45 60,47 60,50 C60,47 58,45 55,45 C52,45 50,47 50,50 C50,55 60,65 60,65 C60,65 70,55 70,50 z"/>
+    </group>
+</vector>
