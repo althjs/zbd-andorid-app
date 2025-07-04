@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.util.Log
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -89,10 +90,16 @@ class MainActivity : AppCompatActivity() {
 
     private fun handleIntent(intent: Intent?) {
         val appLinkData: Uri? = intent?.data
+        Log.d("MainActivity", "handleIntent called with data: $appLinkData")
+        
         if (appLinkData != null) {
+            Log.d("MainActivity", "Processing deep link: $appLinkData")
             // This is a deep link, load the URL in the WebView
             val url = appLinkData.toString().replace("kr.zbd.android://", "https://")
+            Log.d("MainActivity", "Loading URL in WebView: $url")
             webView.loadUrl(url)
+        } else {
+            Log.d("MainActivity", "No deep link data found")
         }
     }
 }
