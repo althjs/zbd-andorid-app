@@ -7,6 +7,7 @@ import android.os.Bundle
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
 import kr.zbd.android.databinding.ActivityMainBinding
 
@@ -65,6 +66,19 @@ class MainActivity : AppCompatActivity() {
         if (intent?.data == null) {
             webView.loadUrl("https://zbd.kr/")
         }
+
+        // onBackPressed() 대체
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                if (webView.canGoBack()) {
+                    webView.goBack()
+                }
+                else {
+                    isEnabled = false // 콜백 비활성화
+                    onBackPressedDispatcher.onBackPressed() // 기본 뒤로 가기 동작 수행
+                }
+            }
+        })
     }
 
     override fun onNewIntent(intent: Intent?) {
@@ -79,15 +93,6 @@ class MainActivity : AppCompatActivity() {
             // This is a deep link, load the URL in the WebView
             val url = appLinkData.toString().replace("kr.zbd.android://", "https://")
             webView.loadUrl(url)
-        }
-    }
-
-    @Deprecated("Deprecated in Java")
-    override fun onBackPressed() {
-        if (webView.canGoBack()) {
-            webView.goBack()
-        } else {
-            super.onBackPressed()
         }
     }
 }

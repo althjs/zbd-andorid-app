@@ -1,23 +1,24 @@
 [versions]
-androidApplication = "8.10.1"
-jetbrainsKotlinAndroid = "1.9.0"
-coreKtx = "1.13.1"
+compileSdk = "34"
+minSdk = "24"
+targetSdk = "34"
+androidx-core-ktx = "1.13.1"
+androidx-appcompat = "1.6.1"
+material = "1.10.0"
+androidx-constraintlayout = "2.1.4"
 junit = "4.13.2"
-junitVersion = "1.1.5"
-espressoCore = "3.5.1"
-appcompat = "1.6.1"
-material = "1.12.0"
-constraintlayout = "2.1.4"
+androidx-junit = "1.1.5"
+androidx-espresso-core = "3.5.1"
 
 [libraries]
-androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
-junit = { group = "junit", name = "junit", version.ref = "junit" }
-androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitVersion" }
-androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espressoCore" }
-androidx-appcompat = { group = "androidx.appcompat", name = "appcompat", version.ref = "appcompat" }
+androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "androidx-core-ktx" }
+androidx-appcompat = { group = "androidx.appcompat", name = "appcompat", version.ref = "androidx-appcompat" }
 material = { group = "com.google.android.material", name = "material", version.ref = "material" }
-androidx-constraintlayout = { group = "androidx.constraintlayout", name = "constraintlayout", version.ref = "constraintlayout" }
+androidx-constraintlayout = { group = "androidx.constraintlayout", name = "constraintlayout", version.ref = "androidx-constraintlayout" }
+junit = { group = "junit", name = "junit", version.ref = "junit" }
+androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "androidx-junit" }
+androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "androidx-espresso-core" }
 
 [plugins]
-android-application = { id = "com.android.application", version.ref = "androidApplication" }
-jetbrains-kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "jetbrainsKotlinAndroid" }
+android-application = { id = "com.android.application", version = "8.2.0" }
+jetbrains-kotlin-android = { id = "org.jetbrains.kotlin.android", version = "1.9.0" }
