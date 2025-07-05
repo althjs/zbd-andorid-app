@@ -56,6 +56,10 @@ class MainActivity : AppCompatActivity() {
     private var imageViewerContainer: ConstraintLayout? = null
     private var photoView: PhotoView? = null
     private var isImageViewerActive = false
+    
+    // 스플래시 화면 관련 변수들
+    private var splashScreen: androidx.core.splashscreen.SplashScreen? = null
+    private var isWebViewReady = false
 
     companion object {
         private const val CAMERA_PERMISSION_REQUEST_CODE = 100
@@ -64,8 +68,11 @@ class MainActivity : AppCompatActivity() {
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
-        // Install splash screen
-        val splashScreen = installSplashScreen()
+        // Install splash screen and keep it visible until webview is ready
+        splashScreen = installSplashScreen()
+        
+        // Keep splash screen visible until webview is ready
+        splashScreen?.setKeepOnScreenCondition { !isWebViewReady }
         
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
@@ -219,11 +226,18 @@ class MainActivity : AppCompatActivity() {
             override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
                 super.onPageStarted(view, url, favicon)
                 swipeRefreshLayout.isRefreshing = true
+                // 웹뷰 로딩 시작 - 아직 준비되지 않음
+                isWebViewReady = false
             }
             
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
                 swipeRefreshLayout.isRefreshing = false
+                
+                // 웹뷰 로딩 완료 후 렌더링 완료까지 500ms 딜레이
+                view?.postDelayed({
+                    isWebViewReady = true
+                }, 500)
                 
                 // JavaScript를 통해 Pull to Refresh 상태 감지 개선
                 view?.evaluateJavascript("""
