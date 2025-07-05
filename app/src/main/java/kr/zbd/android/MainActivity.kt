@@ -230,11 +230,32 @@ class MainActivity : AppCompatActivity() {
                     (function() {
                         // 페이지 스크롤 위치 감지
                         let isAtTop = true;
+                        let hasModalOpen = false;
                         
                         function updatePullToRefreshState() {
                             const currentIsAtTop = window.pageYOffset === 0 || document.documentElement.scrollTop === 0;
-                            if (currentIsAtTop !== isAtTop) {
-                                isAtTop = currentIsAtTop;
+                            
+                            // 모달이 열려있는지 확인
+                            const modals = document.querySelectorAll('[role="dialog"], .modal, .overlay, .popup, [class*="modal"], [class*="dialog"], [class*="overlay"], [class*="popup"]');
+                            const hasVisibleModal = Array.from(modals).some(modal => {
+                                const style = window.getComputedStyle(modal);
+                                return style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0';
+                            });
+                            
+                            // 고정된 위치의 요소들(모달 등)이 있는지 확인
+                            const fixedElements = document.querySelectorAll('[style*="position: fixed"], [style*="position:fixed"]');
+                            const hasFixedElements = Array.from(fixedElements).some(el => {
+                                const style = window.getComputedStyle(el);
+                                return style.position === 'fixed' && style.display !== 'none' && style.zIndex > 1000;
+                            });
+                            
+                            hasModalOpen = hasVisibleModal || hasFixedElements;
+                            
+                            // 모달이 열려있거나 페이지 최상단이 아니면 Pull to Refresh 비활성화
+                            const shouldEnablePullToRefresh = currentIsAtTop && !hasModalOpen;
+                            
+                            if (shouldEnablePullToRefresh !== isAtTop || hasModalOpen) {
+                                isAtTop = shouldEnablePullToRefresh;
                                 // 안드로이드에 스크롤 상태 전달
                                 if (window.Android && window.Android.setCanPullToRefresh) {
                                     window.Android.setCanPullToRefresh(isAtTop);
@@ -247,6 +268,67 @@ class MainActivity : AppCompatActivity() {
                         window.addEventListener('scroll', function() {
                             clearTimeout(scrollTimeout);
                             scrollTimeout = setTimeout(updatePullToRefreshState, 16); // 60fps
+                        }, { passive: true });
+                        
+                        // DOM 변경 감지 (모달 열기/닫기)
+                        const observer = new MutationObserver(function(mutations) {
+                            let shouldUpdate = false;
+                            mutations.forEach(function(mutation) {
+                                if (mutation.type === 'childList' || mutation.type === 'attributes') {
+                                    shouldUpdate = true;
+                                }
+                            });
+                            if (shouldUpdate) {
+                                clearTimeout(scrollTimeout);
+                                scrollTimeout = setTimeout(updatePullToRefreshState, 50);
+                            }
+                        });
+                        
+                        // DOM 변경 감지 시작
+                        observer.observe(document.body, {
+                            childList: true,
+                            subtree: true,
+                            attributes: true,
+                            attributeFilter: ['style', 'class']
+                        });
+                        
+                        // 터치 이벤트 감지 (모달 내 스크롤)
+                        let touchStartY = 0;
+                        document.addEventListener('touchstart', function(e) {
+                            touchStartY = e.touches[0].clientY;
+                        }, { passive: true });
+                        
+                        document.addEventListener('touchmove', function(e) {
+                            // 터치 이벤트가 모달 내에서 발생하는지 확인
+                            const target = e.target;
+                            let isInModal = false;
+                            let currentElement = target;
+                            
+                            while (currentElement && currentElement !== document.body) {
+                                const style = window.getComputedStyle(currentElement);
+                                if (style.position === 'fixed' || 
+                                    currentElement.getAttribute('role') === 'dialog' ||
+                                    currentElement.className.includes('modal') ||
+                                    currentElement.className.includes('dialog') ||
+                                    currentElement.className.includes('overlay') ||
+                                    currentElement.className.includes('popup')) {
+                                    isInModal = true;
+                                    break;
+                                }
+                                currentElement = currentElement.parentElement;
+                            }
+                            
+                            if (isInModal) {
+                                // 모달 내에서 스크롤 중일 때 Pull to Refresh 비활성화
+                                if (window.Android && window.Android.setCanPullToRefresh) {
+                                    window.Android.setCanPullToRefresh(false);
+                                }
+                            }
+                        }, { passive: true });
+                        
+                        document.addEventListener('touchend', function() {
+                            // 터치 종료 후 상태 재확인
+                            setTimeout(updatePullToRefreshState, 100);
                         }, { passive: true });
                         
                         // 초기 상태 설정
