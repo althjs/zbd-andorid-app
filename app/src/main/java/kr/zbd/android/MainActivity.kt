@@ -3,17 +3,24 @@ package kr.zbd.android
 import android.Manifest
 import android.annotation.SuppressLint
 import android.app.Activity
+import android.app.DownloadManager
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Bundle
+import android.os.Environment
 import android.provider.MediaStore
 import android.util.Log
+import android.webkit.DownloadListener
+import android.webkit.URLUtil
 import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
@@ -23,6 +30,7 @@ import androidx.core.content.FileProvider
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import kr.zbd.android.databinding.ActivityMainBinding
 import java.io.File
+import java.io.FileOutputStream
 import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -59,6 +67,30 @@ class MainActivity : AppCompatActivity() {
         webView.settings.allowContentAccess = true
         webView.settings.allowFileAccessFromFileURLs = true
         webView.settings.allowUniversalAccessFromFileURLs = true
+        
+        // 메모리 최적화 설정
+        webView.settings.cacheMode = android.webkit.WebSettings.LOAD_DEFAULT
+        webView.settings.databaseEnabled = true
+        
+        // 하드웨어 가속 활성화
+        webView.setLayerType(WebView.LAYER_TYPE_HARDWARE, null)
+        
+        // 다운로드 리스너 추가
+        webView.setDownloadListener { url, userAgent, contentDisposition, mimetype, contentLength ->
+            val request = DownloadManager.Request(Uri.parse(url))
+            request.setMimeType(mimetype)
+            
+            val fileName = URLUtil.guessFileName(url, contentDisposition, mimetype)
+            request.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, fileName)
+            request.allowScanningByMediaScanner()
+            request.setAllowedNetworkTypes(DownloadManager.Request.NETWORK_WIFI or DownloadManager.Request.NETWORK_MOBILE)
+            request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+            
+            val downloadManager = getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+            downloadManager.enqueue(request)
+            
+            Toast.makeText(this, "다운로드를 시작합니다: $fileName", Toast.LENGTH_SHORT).show()
+        }
 
         // Set WebChromeClient for file upload
         webView.webChromeClient = object : WebChromeClient() {
@@ -67,38 +99,46 @@ class MainActivity : AppCompatActivity() {
                 filePathCallback: ValueCallback<Array<Uri>>?,
                 fileChooserParams: FileChooserParams?
             ): Boolean {
+                Log.d("MainActivity", "onShowFileChooser called")
+                
                 if (fileUploadCallback != null) {
                     fileUploadCallback!!.onReceiveValue(null)
                     fileUploadCallback = null
                 }
 
                 fileUploadCallback = filePathCallback
+                Log.d("MainActivity", "fileUploadCallback set")
 
                 val acceptTypes = fileChooserParams?.acceptTypes
-                val captureEnabled = fileChooserParams?.isCaptureEnabled == true
+                Log.d("MainActivity", "Accept types: ${acceptTypes?.joinToString(", ")}")
+                
+                // 웹과 동일한 UX를 위해 항상 카메라 옵션 표시
+                val showCameraOption = true
 
-                if (captureEnabled || acceptTypes?.contains("image/*") == true) {
-                    // Check camera permission
-                    if (ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
-                        ActivityCompat.requestPermissions(this@MainActivity, arrayOf(Manifest.permission.CAMERA), CAMERA_PERMISSION_REQUEST_CODE)
-                        return true
-                    }
+                // Check camera permission
+                if (ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+                    Log.d("MainActivity", "Requesting camera permission")
+                    ActivityCompat.requestPermissions(this@MainActivity, arrayOf(Manifest.permission.CAMERA), CAMERA_PERMISSION_REQUEST_CODE)
+                    return true
                 }
 
                 // Check storage permission for Android 13+
                 if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
                     if (ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.READ_MEDIA_IMAGES) != PackageManager.PERMISSION_GRANTED) {
+                        Log.d("MainActivity", "Requesting media permission (Android 13+)")
                         ActivityCompat.requestPermissions(this@MainActivity, arrayOf(Manifest.permission.READ_MEDIA_IMAGES, Manifest.permission.READ_MEDIA_VIDEO), STORAGE_PERMISSION_REQUEST_CODE)
                         return true
                     }
                 } else {
                     if (ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.READ_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+                        Log.d("MainActivity", "Requesting storage permission")
                         ActivityCompat.requestPermissions(this@MainActivity, arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE), STORAGE_PERMISSION_REQUEST_CODE)
                         return true
                     }
                 }
 
-                startFileChooser(captureEnabled)
+                Log.d("MainActivity", "All permissions granted, starting file chooser")
+                startFileChooser(showCameraOption)
                 return true
             }
         }
@@ -131,6 +171,49 @@ class MainActivity : AppCompatActivity() {
                 }
                 return true
             }
+            
+            override fun onPageFinished(view: WebView?, url: String?) {
+                super.onPageFinished(view, url)
+                // 웹 표준 API 확장 - 웹페이지 캡처 기능
+                view?.evaluateJavascript("""
+                    // 웹 표준 API처럼 동작하도록 확장
+                    if (!window.webkitRequestFileSystem && !window.showSaveFilePicker) {
+                        // Android WebView에서 파일 저장 API 에뮬레이션
+                        window.saveWebPageAsImage = function() {
+                            if (window.Android && window.Android.captureWebPage) {
+                                window.Android.captureWebPage();
+                                return Promise.resolve();
+                            }
+                            return Promise.reject(new Error('WebView capture not supported'));
+                        };
+                        
+                        // HTML Canvas toBlob API 확장
+                        if (!HTMLCanvasElement.prototype.toBlobNative) {
+                            HTMLCanvasElement.prototype.toBlobNative = HTMLCanvasElement.prototype.toBlob;
+                            HTMLCanvasElement.prototype.toBlob = function(callback, type, quality) {
+                                // 일반적인 Canvas는 기본 동작
+                                if (this.width < window.innerWidth || this.height < window.innerHeight) {
+                                    return this.toBlobNative(callback, type, quality);
+                                }
+                                
+                                // 전체 페이지 캡처 시도
+                                try {
+                                    if (window.Android && window.Android.captureWebPage) {
+                                        window.Android.captureWebPage();
+                                        if (callback) callback(null); // 안드로이드에서 처리됨을 알림
+                                        return;
+                                    }
+                                } catch (e) {
+                                    console.log('Android capture fallback');
+                                }
+                                
+                                // 폴백: 기본 Canvas toBlob
+                                return this.toBlobNative(callback, type, quality);
+                            };
+                        }
+                    }
+                """, null)
+            }
         }
 
         // Handle the intent that started the activity (for deep links)
@@ -140,6 +223,9 @@ class MainActivity : AppCompatActivity() {
         if (intent?.data == null) {
             webView.loadUrl("https://zbd.kr/")
         }
+        
+        // JavaScript 인터페이스 추가
+        webView.addJavascriptInterface(WebAppInterface(), "Android")
 
         // onBackPressed() 대체
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
@@ -176,14 +262,20 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun startFileChooser(captureEnabled: Boolean) {
+    private fun startFileChooser(showCameraOption: Boolean) {
+        Log.d("MainActivity", "startFileChooser called with camera option: $showCameraOption")
+        
         val intent = Intent(Intent.ACTION_GET_CONTENT).apply {
             addCategory(Intent.CATEGORY_OPENABLE)
             type = "*/*"
             putExtra(Intent.EXTRA_MIME_TYPES, arrayOf("image/*", "video/*"))
+            putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true) // 멀티파일 선택 활성화
         }
 
-        val chooserIntent = if (captureEnabled) {
+        val intents = mutableListOf<Intent>()
+        
+        // 웹과 동일한 UX를 위해 항상 카메라 옵션 표시
+        if (showCameraOption) {
             val cameraIntent = Intent(MediaStore.ACTION_IMAGE_CAPTURE)
             val photoFile = createImageFile()
             if (photoFile != null) {
@@ -194,15 +286,23 @@ class MainActivity : AppCompatActivity() {
                     photoFile
                 )
                 cameraIntent.putExtra(MediaStore.EXTRA_OUTPUT, photoURI)
+                intents.add(cameraIntent)
+                Log.d("MainActivity", "Camera intent added")
             }
             
-            Intent.createChooser(intent, "파일 선택").apply {
-                putExtra(Intent.EXTRA_INITIAL_INTENTS, arrayOf(cameraIntent))
+            // 비디오 카메라 인텐트 추가
+            val videoCameraIntent = Intent(MediaStore.ACTION_VIDEO_CAPTURE)
+            intents.add(videoCameraIntent)
+            Log.d("MainActivity", "Video camera intent added")
+        }
+        
+        val chooserIntent = Intent.createChooser(intent, "파일 선택").apply {
+            if (intents.isNotEmpty()) {
+                putExtra(Intent.EXTRA_INITIAL_INTENTS, intents.toTypedArray())
             }
-        } else {
-            Intent.createChooser(intent, "파일 선택")
         }
 
+        Log.d("MainActivity", "Launching file chooser with ${intents.size} additional intents")
         fileChooserLauncher.launch(chooserIntent)
     }
 
@@ -220,35 +320,54 @@ class MainActivity : AppCompatActivity() {
     private val fileChooserLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { result ->
-        if (result.resultCode == Activity.RESULT_OK) {
-            val results = mutableListOf<Uri>()
-            
-            // Handle camera photo
-            if (cameraPhotoPath != null) {
-                val file = File(cameraPhotoPath!!)
-                if (file.exists()) {
-                    results.add(Uri.fromFile(file))
-                }
-                cameraPhotoPath = null
-            }
-            
-            // Handle selected files
+        Log.d("MainActivity", "fileChooserLauncher result: ${result.resultCode}")
+        
+        val results = mutableListOf<Uri>()
+        
+        // Handle selected files from gallery/file picker first (갤러리나 파일 선택기에서 선택한 파일 우선)
+        if (result.resultCode == Activity.RESULT_OK || result.data != null) {
             result.data?.let { data ->
+                Log.d("MainActivity", "Result data available")
+                
+                // Single file selection
                 data.data?.let { uri ->
                     results.add(uri)
-                } ?: run {
-                    data.clipData?.let { clipData ->
-                        for (i in 0 until clipData.itemCount) {
-                            results.add(clipData.getItemAt(i).uri)
-                        }
+                    Log.d("MainActivity", "Single file added: $uri")
+                }
+                
+                // Multiple file selection
+                data.clipData?.let { clipData ->
+                    Log.d("MainActivity", "Multiple files selected: ${clipData.itemCount}")
+                    for (i in 0 until clipData.itemCount) {
+                        val uri = clipData.getItemAt(i).uri
+                        results.add(uri)
+                        Log.d("MainActivity", "Multiple file added: $uri")
                     }
                 }
             }
-            
+        }
+        
+        // Handle camera photo only if no other files were selected (다른 파일이 선택되지 않은 경우에만 카메라 사진 추가)
+        if (results.isEmpty() && cameraPhotoPath != null) {
+            val file = File(cameraPhotoPath!!)
+            if (file.exists()) {
+                results.add(Uri.fromFile(file))
+                Log.d("MainActivity", "Camera photo added: ${cameraPhotoPath}")
+            }
+        }
+        
+        // Clean up camera photo path
+        cameraPhotoPath = null
+        
+        Log.d("MainActivity", "Total files selected: ${results.size}")
+        
+        if (results.isNotEmpty()) {
             fileUploadCallback?.onReceiveValue(results.toTypedArray())
         } else {
+            Log.d("MainActivity", "No files selected or operation cancelled")
             fileUploadCallback?.onReceiveValue(null)
         }
+        
         fileUploadCallback = null
     }
 
@@ -257,12 +376,88 @@ class MainActivity : AppCompatActivity() {
         when (requestCode) {
             CAMERA_PERMISSION_REQUEST_CODE, STORAGE_PERMISSION_REQUEST_CODE -> {
                 if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                    // 웹과 동일한 UX를 위해 항상 카메라 옵션 표시
                     startFileChooser(true)
                 } else {
                     fileUploadCallback?.onReceiveValue(null)
                     fileUploadCallback = null
                 }
             }
+        }
+    }
+    
+    // JavaScript 인터페이스 클래스 - 웹페이지 캡처 기능
+    inner class WebAppInterface {
+        @android.webkit.JavascriptInterface
+        fun captureWebPage() {
+            runOnUiThread {
+                captureWebViewAsImage()
+            }
+        }
+    }
+    
+    private fun captureWebViewAsImage() {
+        try {
+            // 메모리 부족 방지를 위한 가비지 컬렉션
+            System.gc()
+            
+            // WebView 크기 확인 및 최적화
+            val maxDimension = 2048 // 최대 해상도 제한
+            val webViewWidth = webView.width
+            val webViewHeight = webView.height
+            
+            val scale = if (webViewWidth > maxDimension || webViewHeight > maxDimension) {
+                minOf(maxDimension.toFloat() / webViewWidth, maxDimension.toFloat() / webViewHeight)
+            } else {
+                1.0f
+            }
+            
+            val scaledWidth = (webViewWidth * scale).toInt()
+            val scaledHeight = (webViewHeight * scale).toInt()
+            
+            val bitmap = Bitmap.createBitmap(
+                scaledWidth,
+                scaledHeight,
+                Bitmap.Config.RGB_565 // 메모리 사용량 절반으로 줄임
+            )
+            
+            val canvas = android.graphics.Canvas(bitmap)
+            if (scale != 1.0f) {
+                canvas.scale(scale, scale)
+            }
+            
+            webView.draw(canvas)
+            
+            // 파일로 저장
+            val timeStamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
+            val fileName = "WebCapture_$timeStamp.png"
+            
+            val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+            val file = File(downloadsDir, fileName)
+            
+            val fos = FileOutputStream(file)
+            bitmap.compress(Bitmap.CompressFormat.PNG, 80, fos) // 압축률 80%
+            fos.flush()
+            fos.close()
+            
+            // 메모리 정리
+            bitmap.recycle()
+            System.gc()
+            
+            // 미디어 스캐너에 알림
+            val mediaScanIntent = Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE)
+            mediaScanIntent.data = Uri.fromFile(file)
+            sendBroadcast(mediaScanIntent)
+            
+            Toast.makeText(this, "웹페이지가 캡처되었습니다: $fileName", Toast.LENGTH_LONG).show()
+            
+        } catch (e: OutOfMemoryError) {
+            Log.e("MainActivity", "메모리 부족으로 웹페이지 캡처 실패", e)
+            Toast.makeText(this, "메모리가 부족하여 캡처에 실패했습니다", Toast.LENGTH_SHORT).show()
+            System.gc() // 가비지 컬렉션 강제 실행
+        } catch (e: Exception) {
+            Log.e("MainActivity", "웹페이지 캡처 실패", e)
+            Toast.makeText(this, "웹페이지 캡처에 실패했습니다", Toast.LENGTH_SHORT).show()
         }
     }
 }
