@@ -5,6 +5,7 @@ import android.annotation.SuppressLint
 import android.app.Activity
 import android.app.DownloadManager
 import android.content.Context
+import android.content.DialogInterface
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
@@ -13,6 +14,7 @@ import android.os.Bundle
 import android.os.Environment
 import android.provider.MediaStore
 import android.util.Log
+import android.view.View
 import android.webkit.DownloadListener
 import android.webkit.URLUtil
 import android.webkit.ValueCallback
@@ -23,11 +25,17 @@ import android.webkit.WebViewClient
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
+import com.bumptech.glide.Glide
+import com.bumptech.glide.load.engine.DiskCacheStrategy
+import com.github.chrisbanes.photoview.PhotoView
 import kr.zbd.android.databinding.ActivityMainBinding
 import java.io.File
 import java.io.FileOutputStream
@@ -40,8 +48,14 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
     private lateinit var webView: WebView
+    private lateinit var swipeRefreshLayout: SwipeRefreshLayout
     private var fileUploadCallback: ValueCallback<Array<Uri>>? = null
     private var cameraPhotoPath: String? = null
+    
+    // 이미지 뷰어 관련 변수들
+    private var imageViewerContainer: ConstraintLayout? = null
+    private var photoView: PhotoView? = null
+    private var isImageViewerActive = false
 
     companion object {
         private const val CAMERA_PERMISSION_REQUEST_CODE = 100
@@ -58,6 +72,17 @@ class MainActivity : AppCompatActivity() {
         setContentView(binding.root)
 
         webView = binding.webView
+        swipeRefreshLayout = binding.swipeRefreshLayout
+        
+        // Pull to Refresh 설정
+        swipeRefreshLayout.setOnRefreshListener {
+            webView.reload()
+        }
+        
+        // WebView가 최상단에 있을 때만 Pull to Refresh 활성화
+        webView.setOnScrollChangeListener { _, _, scrollY, _, _ ->
+            swipeRefreshLayout.isEnabled = scrollY == 0
+        }
 
         // Enable JavaScript and other settings
         webView.settings.javaScriptEnabled = true
@@ -67,6 +92,13 @@ class MainActivity : AppCompatActivity() {
         webView.settings.allowContentAccess = true
         webView.settings.allowFileAccessFromFileURLs = true
         webView.settings.allowUniversalAccessFromFileURLs = true
+        
+        // WebView 줌 기능 완전 비활성화
+        webView.settings.builtInZoomControls = false
+        webView.settings.displayZoomControls = false
+        webView.settings.setSupportZoom(false)
+        webView.settings.loadWithOverviewMode = true
+        webView.settings.useWideViewPort = true
         
         // 메모리 최적화 설정
         webView.settings.cacheMode = android.webkit.WebSettings.LOAD_DEFAULT
@@ -148,6 +180,12 @@ class MainActivity : AppCompatActivity() {
             override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
                 val url = request?.url?.toString() ?: return false
 
+                // 이미지 파일인지 확인
+                if (isImageUrl(url)) {
+                    showImageViewer(url)
+                    return true
+                }
+
                 if (Uri.parse(url).host == "zbd.kr") {
                     return false // Let the WebView handle it
                 }
@@ -162,6 +200,12 @@ class MainActivity : AppCompatActivity() {
             override fun shouldOverrideUrlLoading(view: WebView?, url: String?): Boolean {
                 if (url == null) return false
 
+                // 이미지 파일인지 확인
+                if (isImageUrl(url)) {
+                    showImageViewer(url)
+                    return true
+                }
+
                 if (Uri.parse(url).host == "zbd.kr") {
                     return false // Let the WebView handle it
                 }
@@ -172,8 +216,46 @@ class MainActivity : AppCompatActivity() {
                 return true
             }
             
+            override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
+                super.onPageStarted(view, url, favicon)
+                swipeRefreshLayout.isRefreshing = true
+            }
+            
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
+                swipeRefreshLayout.isRefreshing = false
+                
+                // JavaScript를 통해 Pull to Refresh 상태 감지 개선
+                view?.evaluateJavascript("""
+                    (function() {
+                        // 페이지 스크롤 위치 감지
+                        let isAtTop = true;
+                        
+                        function updatePullToRefreshState() {
+                            const currentIsAtTop = window.pageYOffset === 0 || document.documentElement.scrollTop === 0;
+                            if (currentIsAtTop !== isAtTop) {
+                                isAtTop = currentIsAtTop;
+                                // 안드로이드에 스크롤 상태 전달
+                                if (window.Android && window.Android.setCanPullToRefresh) {
+                                    window.Android.setCanPullToRefresh(isAtTop);
+                                }
+                            }
+                        }
+                        
+                        // 스크롤 이벤트 리스너
+                        let scrollTimeout;
+                        window.addEventListener('scroll', function() {
+                            clearTimeout(scrollTimeout);
+                            scrollTimeout = setTimeout(updatePullToRefreshState, 16); // 60fps
+                        }, { passive: true });
+                        
+                        // 초기 상태 설정
+                        updatePullToRefreshState();
+                        
+                        // 페이지 로드 완료 후 한 번 더 확인
+                        setTimeout(updatePullToRefreshState, 100);
+                    })();
+                """, null)
                 // 웹 표준 API 확장 - 웹페이지 캡처 기능
                 view?.evaluateJavascript("""
                     // 웹 표준 API처럼 동작하도록 확장
@@ -230,12 +312,19 @@ class MainActivity : AppCompatActivity() {
         // onBackPressed() 대체
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
-                if (webView.canGoBack()) {
-                    webView.goBack()
-                }
-                else {
-                    isEnabled = false // 콜백 비활성화
-                    onBackPressedDispatcher.onBackPressed() // 기본 뒤로 가기 동작 수행
+                when {
+                    // 1. 이미지 뷰어가 활성화된 경우 - 이미지 뷰어만 닫기
+                    isImageViewerActive -> {
+                        hideImageViewer()
+                    }
+                    // 2. WebView에서 뒤로 갈 수 있는 경우 - WebView 뒤로가기
+                    webView.canGoBack() -> {
+                        webView.goBack()
+                    }
+                    // 3. 더 이상 뒤로 갈 곳이 없는 경우 - 앱 종료 확인
+                    else -> {
+                        showExitConfirmDialog()
+                    }
                 }
             }
         })
@@ -394,6 +483,20 @@ class MainActivity : AppCompatActivity() {
                 captureWebViewAsImage()
             }
         }
+        
+        @android.webkit.JavascriptInterface
+        fun setCanPullToRefresh(canPull: Boolean) {
+            runOnUiThread {
+                swipeRefreshLayout.isEnabled = canPull
+            }
+        }
+        
+        @android.webkit.JavascriptInterface
+        fun showImageViewer(imageUrl: String) {
+            runOnUiThread {
+                showImageViewer(imageUrl)
+            }
+        }
     }
     
     private fun captureWebViewAsImage() {
@@ -459,5 +562,102 @@ class MainActivity : AppCompatActivity() {
             Log.e("MainActivity", "웹페이지 캡처 실패", e)
             Toast.makeText(this, "웹페이지 캡처에 실패했습니다", Toast.LENGTH_SHORT).show()
         }
+    }
+    
+    // 이미지 뷰어 관련 메서드들
+    private fun isImageUrl(url: String): Boolean {
+        val imageExtensions = arrayOf(".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp", ".svg")
+        val lowerUrl = url.lowercase()
+        // 이미지 확장자 확인 또는 이미지 호스팅 서비스 패턴 확인
+        return imageExtensions.any { lowerUrl.contains(it) } || 
+               lowerUrl.contains("picsum.photos") ||
+               lowerUrl.contains("images/") ||
+               lowerUrl.contains("img/") ||
+               url.contains("image") ||
+               // Content-Type을 확인할 수 없으므로 일반적인 패턴으로 감지
+               (lowerUrl.contains("random=") && lowerUrl.contains("picsum"))
+    }
+    
+    private fun showImageViewer(imageUrl: String) {
+        if (isImageViewerActive) return
+        
+        isImageViewerActive = true
+        
+        // 이미지 뷰어 컨테이너 생성
+        imageViewerContainer = ConstraintLayout(this).apply {
+            id = View.generateViewId()
+            setBackgroundColor(0xDD000000.toInt()) // 반투명 검은색 배경
+            layoutParams = ConstraintLayout.LayoutParams(
+                ConstraintLayout.LayoutParams.MATCH_PARENT,
+                ConstraintLayout.LayoutParams.MATCH_PARENT
+            )
+            
+            // 배경 클릭 시 뷰어 닫기
+            setOnClickListener { hideImageViewer() }
+        }
+        
+        // PhotoView 생성 (고성능 이미지 뷰어)
+        photoView = PhotoView(this).apply {
+            id = View.generateViewId()
+            layoutParams = ConstraintLayout.LayoutParams(
+                ConstraintLayout.LayoutParams.MATCH_PARENT,
+                ConstraintLayout.LayoutParams.MATCH_PARENT
+            )
+            
+            // PhotoView 자체 설정
+            minimumScale = 0.5f
+            maximumScale = 10.0f
+            mediumScale = 2.0f
+            
+            // 싱글탭으로 이미지 뷰어 닫기
+            setOnPhotoTapListener { _, _, _ ->
+                hideImageViewer()
+            }
+            
+            // 뷰 영역 외부 탭으로도 닫기
+            setOnOutsidePhotoTapListener {
+                hideImageViewer()
+            }
+        }
+        
+        // 이미지 로드
+        Glide.with(this)
+            .load(imageUrl)
+            .diskCacheStrategy(DiskCacheStrategy.ALL)
+            .into(photoView!!)
+        
+        // 뷰 계층에 추가
+        imageViewerContainer?.addView(photoView)
+        (binding.root as ConstraintLayout).addView(imageViewerContainer)
+    }
+    
+    private fun hideImageViewer() {
+        if (!isImageViewerActive) return
+        
+        isImageViewerActive = false
+        
+        imageViewerContainer?.let { container ->
+            (binding.root as ConstraintLayout).removeView(container)
+        }
+        
+        imageViewerContainer = null
+        photoView = null
+    }
+    
+    // 앱 종료 확인 다이얼로그
+    private fun showExitConfirmDialog() {
+        AlertDialog.Builder(this)
+            .setTitle("앱 종료")
+            .setMessage("정말로 앱을 종료하시겠습니까?")
+            .setPositiveButton("종료") { _, _ ->
+                // 앱 종료
+                finishAffinity()
+            }
+            .setNegativeButton("취소") { dialog, _ ->
+                // 다이얼로그만 닫기
+                dialog.dismiss()
+            }
+            .setCancelable(true) // 바깥 영역 터치로도 취소 가능
+            .show()
     }
 }
