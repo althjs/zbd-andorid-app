@@ -1,0 +1,8 @@
+[{
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "kr.zbd.android",
+    "sha256_cert_fingerprints": ["F3:44:36:8A:F7:3D:2E:E6:94:D8:38:23:41:76:78:6E:91:C4:99:BA:A3:65:FC:7B:8C:C3:01:AD:28:DD:A5:4B"]
+  }
+}]
