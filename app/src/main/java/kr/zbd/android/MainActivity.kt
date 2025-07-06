@@ -100,6 +100,10 @@ class MainActivity : AppCompatActivity() {
         webView.settings.allowFileAccessFromFileURLs = true
         webView.settings.allowUniversalAccessFromFileURLs = true
         
+        // UserAgent에 "ZBD" 추가
+        val originalUserAgent = webView.settings.userAgentString
+        webView.settings.userAgentString = "$originalUserAgent ZBD"
+        
         // WebView 줌 기능 완전 비활성화
         webView.settings.builtInZoomControls = false
         webView.settings.displayZoomControls = false

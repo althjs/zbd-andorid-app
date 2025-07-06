@@ -70,7 +70,7 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="https"
                     android:host="zbd.kr"
-                    android:pathPrefix="/service/auth/google_callback" />
+                    android:pathPrefix="/service/auth/google_callback_app" />
             </intent-filter>
         </activity>
 
