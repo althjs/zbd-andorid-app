@@ -27,6 +27,7 @@ import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.browser.customtabs.CustomTabsIntent
 import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
@@ -191,6 +192,12 @@ class MainActivity : AppCompatActivity() {
             override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
                 val url = request?.url?.toString() ?: return false
 
+                // 구글 로그인 URL인지 확인하고 Custom Tabs로 열기
+                if (isGoogleAuthUrl(url)) {
+                    openWithCustomTabs(url)
+                    return true
+                }
+
                 // 이미지 파일인지 확인
                 if (isImageUrl(url)) {
                     showImageViewer(url)
@@ -210,6 +217,12 @@ class MainActivity : AppCompatActivity() {
             @Deprecated("Deprecated in Java")
             override fun shouldOverrideUrlLoading(view: WebView?, url: String?): Boolean {
                 if (url == null) return false
+
+                // 구글 로그인 URL인지 확인하고 Custom Tabs로 열기
+                if (isGoogleAuthUrl(url)) {
+                    openWithCustomTabs(url)
+                    return true
+                }
 
                 // 이미지 파일인지 확인
                 if (isImageUrl(url)) {
@@ -238,10 +251,10 @@ class MainActivity : AppCompatActivity() {
                 super.onPageFinished(view, url)
                 swipeRefreshLayout.isRefreshing = false
                 
-                // 웹뷰 로딩 완료 후 렌더링 완료까지 500ms 딜레이
+                // 웹뷰 로딩 완료 후 렌더링 완료까지 200ms 딜레이 (더 빠른 스플래시 해제)
                 view?.postDelayed({
                     isWebViewReady = true
-                }, 500)
+                }, 200)
                 
                 // JavaScript를 통해 Pull to Refresh 상태 감지 개선
                 view?.evaluateJavascript("""
@@ -448,6 +461,29 @@ class MainActivity : AppCompatActivity() {
             webView.loadUrl(url)
         } else {
             Log.d("MainActivity", "No deep link data found")
+        }
+    }
+    
+    // 구글 인증 URL 확인
+    private fun isGoogleAuthUrl(url: String): Boolean {
+        return url.contains("accounts.google.com") ||
+               url.contains("oauth2/auth") ||
+               (url.contains("google") && (url.contains("signin") || url.contains("oauth")))
+    }
+    
+    // Custom Tabs로 URL 열기
+    private fun openWithCustomTabs(url: String) {
+        try {
+            val customTabsIntent = CustomTabsIntent.Builder()
+                .setShowTitle(true)
+                .setUrlBarHidingEnabled(true)
+                .build()
+            customTabsIntent.launchUrl(this, Uri.parse(url))
+        } catch (e: Exception) {
+            Log.e("MainActivity", "Failed to open Custom Tab", e)
+            // 폴백: 기본 브라우저로 열기
+            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+            startActivity(intent)
         }
     }
 

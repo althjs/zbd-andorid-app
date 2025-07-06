@@ -11,8 +11,8 @@ android {
         applicationId = "kr.zbd.android"
         minSdk = 24
         targetSdk = 34
-        versionCode = 3
-        versionName = "1.0.2"
+        versionCode = 4
+        versionName = "1.0.3"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         
@@ -86,6 +86,7 @@ dependencies {
     implementation("androidx.swiperefreshlayout:swiperefreshlayout:1.1.0")
     implementation("com.github.bumptech.glide:glide:4.16.0")
     implementation("com.github.chrisbanes:PhotoView:2.3.0")
+    implementation("androidx.browser:browser:1.7.0") // Chrome Custom Tabs
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
