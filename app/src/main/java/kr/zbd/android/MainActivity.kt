@@ -490,45 +490,90 @@ class MainActivity : AppCompatActivity() {
     private fun startFileChooser(showCameraOption: Boolean) {
         Log.d("MainActivity", "startFileChooser called with camera option: $showCameraOption")
         
-        val intent = Intent(Intent.ACTION_GET_CONTENT).apply {
-            addCategory(Intent.CATEGORY_OPENABLE)
-            type = "*/*"
-            putExtra(Intent.EXTRA_MIME_TYPES, arrayOf("image/*", "video/*"))
-            putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true) // 멀티파일 선택 활성화
-        }
-
-        val intents = mutableListOf<Intent>()
-        
-        // 웹과 동일한 UX를 위해 항상 카메라 옵션 표시
         if (showCameraOption) {
-            val cameraIntent = Intent(MediaStore.ACTION_IMAGE_CAPTURE)
-            val photoFile = createImageFile()
-            if (photoFile != null) {
-                cameraPhotoPath = photoFile.absolutePath
-                val photoURI = FileProvider.getUriForFile(
-                    this,
-                    "${packageName}.fileprovider",
-                    photoFile
-                )
-                cameraIntent.putExtra(MediaStore.EXTRA_OUTPUT, photoURI)
-                intents.add(cameraIntent)
-                Log.d("MainActivity", "Camera intent added")
+            // 커스텀 다이얼로그로 파일 선택 옵션 표시
+            showFileChooserDialog()
+        } else {
+            // 카메라 옵션 없이 파일 선택만
+            val intent = Intent(Intent.ACTION_GET_CONTENT).apply {
+                addCategory(Intent.CATEGORY_OPENABLE)
+                type = "*/*"
+                putExtra(Intent.EXTRA_MIME_TYPES, arrayOf("image/*", "video/*"))
+                putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
             }
+            fileChooserLauncher.launch(intent)
+        }
+    }
+    
+    private fun showFileChooserDialog() {
+        val options = arrayOf("파일 선택", "사진 촬영", "동영상 촬영")
+        val icons = arrayOf(
+            android.R.drawable.ic_menu_gallery,
+            android.R.drawable.ic_menu_camera,
+            android.R.drawable.ic_media_play  // 동영상 재생 아이콘
+        )
+        
+        // 커스텀 어댑터를 사용하여 아이콘과 텍스트를 함께 표시
+        val adapter = object : android.widget.BaseAdapter() {
+            override fun getCount() = options.size
+            override fun getItem(position: Int) = options[position]
+            override fun getItemId(position: Int) = position.toLong()
             
-            // 비디오 카메라 인텐트 추가
-            val videoCameraIntent = Intent(MediaStore.ACTION_VIDEO_CAPTURE)
-            intents.add(videoCameraIntent)
-            Log.d("MainActivity", "Video camera intent added")
+            override fun getView(position: Int, convertView: android.view.View?, parent: android.view.ViewGroup?): android.view.View {
+                val view = convertView ?: layoutInflater.inflate(android.R.layout.simple_list_item_1, parent, false)
+                val textView = view.findViewById<android.widget.TextView>(android.R.id.text1)
+                textView.text = options[position]
+                textView.setCompoundDrawablesWithIntrinsicBounds(icons[position], 0, 0, 0)
+                textView.compoundDrawablePadding = 32
+                return view
+            }
         }
         
-        val chooserIntent = Intent.createChooser(intent, "파일 선택").apply {
-            if (intents.isNotEmpty()) {
-                putExtra(Intent.EXTRA_INITIAL_INTENTS, intents.toTypedArray())
+        AlertDialog.Builder(this)
+            .setTitle("파일 선택")
+            .setAdapter(adapter) { _, which ->
+                when (which) {
+                    0 -> {
+                        // 파일 선택
+                        val intent = Intent(Intent.ACTION_GET_CONTENT).apply {
+                            addCategory(Intent.CATEGORY_OPENABLE)
+                            type = "*/*"
+                            putExtra(Intent.EXTRA_MIME_TYPES, arrayOf("image/*", "video/*"))
+                            putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+                        }
+                        fileChooserLauncher.launch(intent)
+                    }
+                    1 -> {
+                        // 사진 촬영
+                        val cameraIntent = Intent(MediaStore.ACTION_IMAGE_CAPTURE)
+                        val photoFile = createImageFile()
+                        if (photoFile != null) {
+                            cameraPhotoPath = photoFile.absolutePath
+                            val photoURI = FileProvider.getUriForFile(
+                                this,
+                                "${packageName}.fileprovider",
+                                photoFile
+                            )
+                            cameraIntent.putExtra(MediaStore.EXTRA_OUTPUT, photoURI)
+                            fileChooserLauncher.launch(cameraIntent)
+                        }
+                    }
+                    2 -> {
+                        // 동영상 촬영
+                        val videoCameraIntent = Intent(MediaStore.ACTION_VIDEO_CAPTURE)
+                        fileChooserLauncher.launch(videoCameraIntent)
+                    }
+                }
             }
-        }
-
-        Log.d("MainActivity", "Launching file chooser with ${intents.size} additional intents")
-        fileChooserLauncher.launch(chooserIntent)
+            .setNegativeButton("취소") { _, _ ->
+                fileUploadCallback?.onReceiveValue(null)
+                fileUploadCallback = null
+            }
+            .setOnCancelListener {
+                fileUploadCallback?.onReceiveValue(null)
+                fileUploadCallback = null
+            }
+            .show()
     }
 
     private fun createImageFile(): File? {
