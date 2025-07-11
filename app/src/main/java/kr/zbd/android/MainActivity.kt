@@ -198,6 +198,13 @@ class MainActivity : AppCompatActivity() {
                     return true
                 }
 
+                // 카카오 인증 URL도 Custom Tabs로 열기
+                if (isKakaoAuthUrl(url)) {
+                    // Log.d("MainActivity", "카카오 인증 URL: $url")
+                    openWithCustomTabs(url)
+                    return true
+                }
+
                 // 이미지 파일인지 확인
                 if (isImageUrl(url)) {
                     showImageViewer(url)
@@ -220,6 +227,13 @@ class MainActivity : AppCompatActivity() {
 
                 // 구글 로그인 URL인지 확인하고 Custom Tabs로 열기
                 if (isGoogleAuthUrl(url)) {
+                    openWithCustomTabs(url)
+                    return true
+                }
+
+                // 카카오 인증 URL도 Custom Tabs로 열기
+                if (isKakaoAuthUrl(url)) {
+                    Log.d("MainActivity", "카카오 인증 URL: $url")
                     openWithCustomTabs(url)
                     return true
                 }
@@ -471,6 +485,11 @@ class MainActivity : AppCompatActivity() {
                (url.contains("google") && (url.contains("signin") || url.contains("oauth")))
     }
     
+    // 카카오 인증 URL 확인
+    private fun isKakaoAuthUrl(url: String): Boolean {
+        return url.contains("kauth.kakao.com/oauth/authorize")
+    }
+
     // Custom Tabs로 URL 열기
     private fun openWithCustomTabs(url: String) {
         try {

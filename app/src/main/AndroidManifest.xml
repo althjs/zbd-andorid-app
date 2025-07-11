@@ -72,6 +72,15 @@
                     android:host="zbd.kr"
                     android:pathPrefix="/service/auth/google_callback_app" />
             </intent-filter>
+            <!-- 카카오 로그인 콜백 intent-filter 추가 -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https"
+                    android:host="zbd.kr"
+                    android:pathPrefix="/service/auth/kakao_callback_app" />
+            </intent-filter>
         </activity>
 
         <provider
