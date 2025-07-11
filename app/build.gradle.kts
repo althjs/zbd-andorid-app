@@ -11,8 +11,8 @@ android {
         applicationId = "kr.zbd.android"
         minSdk = 24
         targetSdk = 35
-        versionCode = 8
-        versionName = "1.0.8"
+        versionCode = 9
+        versionName = "1.0.9"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         
@@ -27,7 +27,7 @@ android {
         create("release") {
             storeFile = file("../keys/release.keystore")
             storePassword = "***REMOVED***"
-            keyAlias = "my-app-alias"
+            keyAlias = "release"
             keyPassword = "***REMOVED***"
         }
     }
