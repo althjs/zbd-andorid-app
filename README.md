@@ -17,6 +17,7 @@
 - **파일 업로드**: 갤러리에서 파일 선택 가능
 - **사진 촬영**: 카메라로 직접 사진 촬영 가능
 - **권한 관리**: 필요한 권한 자동 요청 및 관리
+- **카카오톡 링크 연동**: 웹페이지에서 카카오톡 공유 및 링크 열기 지원
 
 ## 🚀 최근 업데이트 (v1.0.0)
 
@@ -26,6 +27,7 @@
 - 🔧 **WebChromeClient**: 파일 업로드 및 다운로드 지원
 - 🛡️ **FileProvider**: 안전한 파일 공유 메커니즘
 - 📱 **동적 권한 요청**: 런타임 권한 자동 처리
+- 💬 **카카오톡 링크 지원**: 카카오톡 공유/링크 열기 기능 추가
 
 ### 기술적 개선사항
 - Android 13+ 미디어 권한 지원
@@ -52,7 +54,7 @@ keytool -genkeypair -alias my-app-alias -keyalg RSA -keysize 2048 -validity 1000
 
 ```properties
 # 릴리스 빌드를 위한 서명 속성
-KEYSTORE_PATH=/Users/althjs/nst/octopus-typing/android-zbd/keys/release.keystore
+KEYSTORE_PATH=/Users/althjs/nst/android-zbd/keys/release.keystore
 KEYSTORE_PASSWORD=YOUR_KEYSTORE_PASSWORD # 실제 키스토어 비밀번호로 교체
 KEY_ALIAS=my-app-alias
 KEY_PASSWORD=YOUR_KEY_PASSWORD # 실제 키 비밀번호로 교체
@@ -379,10 +381,3 @@ Google 캐시가 갱신된 후:
 ```bash
 adb shell pm verify-app-links --re-verify kr.zbd.android
 ```
-
-### ⚠️ 주의사항
-
-1. **서버 파일 업데이트 후**: Google 캐시 갱신까지 시간 소요
-2. **테스트 환경**: `android:autoVerify="false"`로 테스트 후 `true`로 변경
-3. **프로덕션 배포**: Google 캐시 상태 확인 후 배포 권장
-4. **키스토어 변경 시**: 반드시 `assetlinks.json` 파일도 함께 업데이트

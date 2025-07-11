@@ -54,16 +54,16 @@ if command -v convert &> /dev/null; then
     
     for dir in "${!sizes[@]}"; do
         size=${sizes[$dir]}
-        mkdir -p "/Users/althjs/nst/octopus-typing/android-zbd/app/src/main/res/$dir"
+        mkdir -p "/Users/althjs/nst/android-zbd/app/src/main/res/$dir"
         
         # 일반 아이콘
-        convert /tmp/zbd_icon.svg -resize ${size}x${size} "/Users/althjs/nst/octopus-typing/android-zbd/app/src/main/res/$dir/ic_launcher.png"
+        convert /tmp/zbd_icon.svg -resize ${size}x${size} "/Users/althjs/nst/android-zbd/app/src/main/res/$dir/ic_launcher.png"
         
         # 라운드 아이콘
         convert /tmp/zbd_icon.svg -resize ${size}x${size} \
             \( +clone -threshold 101% -fill white -draw "circle $(($size/2)),$(($size/2)) $(($size/2)),0" \) \
             -alpha off -compose copy_opacity -composite \
-            "/Users/althjs/nst/octopus-typing/android-zbd/app/src/main/res/$dir/ic_launcher_round.png"
+            "/Users/althjs/nst/android-zbd/app/src/main/res/$dir/ic_launcher_round.png"
         
         echo "Generated ${size}x${size} icons for $dir"
     done
