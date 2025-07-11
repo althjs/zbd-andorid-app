@@ -26,9 +26,9 @@ android {
     signingConfigs {
         create("release") {
             storeFile = file("../keys/release.keystore")
-            storePassword = "***REMOVED***"
+            storePassword = "키스토어암호"
             keyAlias = "release"
-            keyPassword = "***REMOVED***"
+            keyPassword = "키스토어암호"
         }
     }
 
